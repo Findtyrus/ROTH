@@ -68,6 +68,42 @@ export interface MonteCarloResults {
   runs: number;
 }
 
+export interface DistributionInputs {
+  monthlyDistribution: number;
+  distributionIncreaseRate: number;
+  distributionStartAge: number;
+  enabled: boolean;
+}
+
+export interface DistYearData {
+  age: number;
+  beginBalance: number;
+  annualDistribution: number;
+  monthlyEquivalent: number;
+  growth: number;
+  endBalance: number;
+  cumulativeDistributions: number;
+  depleted: boolean;
+}
+
+export interface CRMClient {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  notes: string;
+  lastUpdated: string;
+  savedInputs: PlanInputs;
+  savedDistInputs: DistributionInputs;
+}
+
+export interface ReportMeta {
+  clientName: string;
+  advisorName: string;
+  firmName: string;
+  disclosureText: string;
+}
+
 export const DEFAULT_INPUTS: PlanInputs = {
   currentAge: 65,
   endAge: 100,
@@ -80,4 +116,11 @@ export const DEFAULT_INPUTS: PlanInputs = {
   rmdStartAge: 73,
   conversionAmount: 2_000_000,
   conversionAge: 65,
+}
+
+export const DEFAULT_DIST_INPUTS: DistributionInputs = {
+  monthlyDistribution: 10_000,
+  distributionIncreaseRate: 0.03,
+  distributionStartAge: 65,
+  enabled: true,
 }

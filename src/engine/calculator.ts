@@ -7,8 +7,17 @@ import type {
 } from './types'
 import { calculateRMD } from './rmdTable'
 
-function effectiveTaxRate(inputs: PlanInputs): number {
+export function effectiveTaxRate(inputs: PlanInputs): number {
   return Math.min(inputs.federalTaxRate + inputs.stateTaxRate, 0.85)
+}
+
+/**
+ * Mid-year withdrawal assumption: distributions are taken throughout the year,
+ * so the effective earning balance is reduced by half the withdrawal.
+ * growth = max(0, beginBalance - withdrawal/2) * rate
+ */
+export function midYearGrowth(beginBalance: number, withdrawal: number, rate: number): number {
+  return Math.max(0, beginBalance - withdrawal / 2) * rate
 }
 
 function projectTraditional(inputs: PlanInputs): TraditionalYearData[] {
@@ -23,18 +32,22 @@ function projectTraditional(inputs: PlanInputs): TraditionalYearData[] {
 
   for (let age = inputs.currentAge; age <= inputs.endAge; age++) {
     const begin = balance
-    const growth = begin * g
-    const balanceBeforeRMD = begin + growth
 
     const rmdBase = age === inputs.currentAge ? begin : prevBalance
     const rmd = age === inputs.currentAge
       ? 0
       : calculateRMD(rmdBase, age, inputs.rmdStartAge)
 
-    const actualRMD = Math.min(rmd, balanceBeforeRMD)
+    // Mid-year assumption applied to RMD years
+    const growth = rmd > 0
+      ? midYearGrowth(begin, rmd, g)
+      : begin * g
+
+    const balanceAfterGrowth = begin + growth
+    const actualRMD = Math.min(rmd, balanceAfterGrowth)
     const taxes = actualRMD * taxRate
     const netDist = actualRMD - taxes
-    const end = balanceBeforeRMD - actualRMD
+    const end = Math.max(0, balanceAfterGrowth - actualRMD)
 
     cumulativeTaxes += taxes
     cumulativeNetDist += netDist

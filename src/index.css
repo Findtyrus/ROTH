@@ -41,6 +41,22 @@
   --shadow-glow-blue: 0 0 32px rgba(59, 130, 246, 0.12);
 }
 
+html.light {
+  --bg-base: #f0f4f8;
+  --bg-surface: #ffffff;
+  --bg-elevated: #e8edf2;
+  --bg-card: #dde4ec;
+  --border: rgba(59, 130, 246, 0.18);
+  --border-accent: rgba(59, 130, 246, 0.38);
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --blue-dim: rgba(59, 130, 246, 0.10);
+  --orange-dim: rgba(245, 158, 11, 0.10);
+  --green-dim: rgba(16, 185, 129, 0.10);
+  --shadow-card: 0 4px 24px rgba(0,0,0,0.08);
+}
+
 html, body {
   background: var(--bg-base);
   color: var(--text-primary);

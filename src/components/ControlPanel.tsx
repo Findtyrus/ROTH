@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
-import type { PlanInputs } from '../engine/types'
+import type { PlanInputs, DistributionInputs } from '../engine/types'
 import { fmtFull, fmtPct } from '../utils/formatters'
 
 interface Props {
   inputs: PlanInputs
   onChange: (inputs: PlanInputs) => void
+  distInputs: DistributionInputs
+  onDistChange: (d: DistributionInputs) => void
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -81,9 +83,11 @@ function NumberInput({
   )
 }
 
-export function ControlPanel({ inputs, onChange }: Props) {
+export function ControlPanel({ inputs, onChange, distInputs, onDistChange }: Props) {
   const set = <K extends keyof PlanInputs>(key: K, val: PlanInputs[K]) =>
     onChange({ ...inputs, [key]: val })
+  const setDist = <K extends keyof DistributionInputs>(key: K, val: DistributionInputs[K]) =>
+    onDistChange({ ...distInputs, [key]: val })
 
   return (
     <div style={{
@@ -130,6 +134,42 @@ export function ControlPanel({ inputs, onChange }: Props) {
           onChange={v => set('conversionAmount', v)} />
         <Field label="Conversion Age" value={inputs.conversionAge} min={inputs.currentAge} max={80}
           format={v => `${v}`} onChange={v => set('conversionAge', v)} />
+      </Section>
+
+      <Section title="Monthly Distributions">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Enable Distributions</span>
+          <button
+            onClick={() => setDist('enabled', !distInputs.enabled)}
+            style={{
+              width: 38, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer',
+              background: distInputs.enabled ? 'var(--green)' : 'var(--bg-card)',
+              position: 'relative', transition: 'background 0.2s',
+            }}
+          >
+            <span style={{
+              position: 'absolute', top: 2, left: distInputs.enabled ? 18 : 2,
+              width: 16, height: 16, borderRadius: '50%', background: '#fff',
+              transition: 'left 0.2s',
+            }} />
+          </button>
+        </div>
+        {distInputs.enabled && <>
+          <NumberInput label="Monthly Distribution ($)" value={distInputs.monthlyDistribution}
+            onChange={v => setDist('monthlyDistribution', v)} />
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: -8 }}>
+            Annual equivalent: <strong style={{ color: 'var(--green-light)' }}>{fmtFull(distInputs.monthlyDistribution * 12)}</strong>
+          </div>
+          <Field label="Annual Increase (COLA)" value={distInputs.distributionIncreaseRate} min={0} max={0.08} step={0.005}
+            format={fmtPct} onChange={v => setDist('distributionIncreaseRate', v)} />
+          <Field label="Distribution Start Age" value={distInputs.distributionStartAge} min={inputs.currentAge} max={inputs.endAge}
+            format={v => `${v}`} onChange={v => setDist('distributionStartAge', v)} />
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            Year 10 distribution: <strong style={{ color: 'var(--green-light)' }}>
+              {fmtFull(distInputs.monthlyDistribution * 12 * Math.pow(1 + distInputs.distributionIncreaseRate, 9) / 12)}/mo
+            </strong>
+          </div>
+        </>}
       </Section>
 
       <div style={{
