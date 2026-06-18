@@ -1,5 +1,6 @@
 import type {
   PlanInputs,
+  DistributionInputs,
   ProjectionResults,
   TraditionalYearData,
   RothFromIRAYearData,
@@ -12,42 +13,50 @@ export function effectiveTaxRate(inputs: PlanInputs): number {
 }
 
 /**
- * Mid-year withdrawal assumption: distributions are taken throughout the year,
- * so the effective earning balance is reduced by half the withdrawal.
+ * Mid-year withdrawal assumption: distributions are spread through the year,
+ * so effectively half the withdrawal has left before earning returns.
  * growth = max(0, beginBalance - withdrawal/2) * rate
  */
 export function midYearGrowth(beginBalance: number, withdrawal: number, rate: number): number {
   return Math.max(0, beginBalance - withdrawal / 2) * rate
 }
 
-function projectTraditional(inputs: PlanInputs): TraditionalYearData[] {
+function annualDistTarget(age: number, dist: DistributionInputs): number {
+  if (!dist.enabled || age < dist.distributionStartAge) return 0
+  const yearsElapsed = age - dist.distributionStartAge
+  return dist.monthlyDistribution * 12 * Math.pow(1 + dist.distributionIncreaseRate, yearsElapsed)
+}
+
+function projectTraditional(inputs: PlanInputs, dist: DistributionInputs): TraditionalYearData[] {
   const rows: TraditionalYearData[] = []
   const taxRate = effectiveTaxRate(inputs)
   const g = inputs.growthRate
 
   let balance = inputs.initialBalance
+  let prevBalance = inputs.initialBalance  // prior year-end balance for RMD base
   let cumulativeTaxes = 0
   let cumulativeNetDist = 0
-  let prevBalance = balance
 
   for (let age = inputs.currentAge; age <= inputs.endAge; age++) {
     const begin = balance
 
-    const rmdBase = age === inputs.currentAge ? begin : prevBalance
-    const rmd = age === inputs.currentAge
-      ? 0
-      : calculateRMD(rmdBase, age, inputs.rmdStartAge)
+    // RMD: always use prior year-end balance as base (IRS rule).
+    // calculateRMD returns 0 when age < rmdStartAge — no special-casing needed.
+    const rmd = calculateRMD(prevBalance, age, inputs.rmdStartAge)
 
-    // Mid-year assumption applied to RMD years
-    const growth = rmd > 0
-      ? midYearGrowth(begin, rmd, g)
+    const distTarget = annualDistTarget(age, dist)
+    const totalWithdrawal = Math.min(begin, Math.max(rmd, distTarget))
+
+    const growth = totalWithdrawal > 0
+      ? midYearGrowth(begin, totalWithdrawal, g)
       : begin * g
 
-    const balanceAfterGrowth = begin + growth
-    const actualRMD = Math.min(rmd, balanceAfterGrowth)
-    const taxes = actualRMD * taxRate
-    const netDist = actualRMD - taxes
-    const end = Math.max(0, balanceAfterGrowth - actualRMD)
+    const afterGrowth = begin + growth
+    const actualWithdrawal = Math.min(totalWithdrawal, afterGrowth)
+    const actualRMD = Math.min(rmd, afterGrowth)
+    const taxes = actualWithdrawal * taxRate
+    const netDist = actualWithdrawal - taxes
+    const end = Math.max(0, afterGrowth - actualWithdrawal)
 
     cumulativeTaxes += taxes
     cumulativeNetDist += netDist
@@ -58,11 +67,12 @@ function projectTraditional(inputs: PlanInputs): TraditionalYearData[] {
       beginBalance: begin,
       growth,
       rmdAmount: actualRMD,
+      totalWithdrawal: actualWithdrawal,
       taxesPaid: taxes,
       netDistribution: netDist,
       endBalance: end,
       cumulativeTaxes,
-      afterTaxWealth: end + cumulativeNetDist,
+      afterTaxWealth: end * (1 - taxRate) + cumulativeNetDist,
       cumulativeNetDistributions: cumulativeNetDist,
     })
 
@@ -72,66 +82,170 @@ function projectTraditional(inputs: PlanInputs): TraditionalYearData[] {
   return rows
 }
 
-function projectRothFromIRA(inputs: PlanInputs): RothFromIRAYearData[] {
+function projectRothFromIRA(inputs: PlanInputs, dist: DistributionInputs): RothFromIRAYearData[] {
   const rows: RothFromIRAYearData[] = []
   const taxRate = effectiveTaxRate(inputs)
-  const taxDue = inputs.conversionAmount * taxRate
-  const initialRothBalance = inputs.conversionAmount - taxDue
   const g = inputs.growthRate
-  const cumulativeTaxesPaid = taxDue
 
-  let balance = inputs.initialBalance
+  let tradBalance = inputs.initialBalance
+  let rothBalance = 0
+  let prevTradBalance = inputs.initialBalance
+  let cumulativeTaxesPaid = 0
+  let cumulativeNetDist = 0
 
   for (let age = inputs.currentAge; age <= inputs.endAge; age++) {
+    // Apply conversion at the start of the conversion year.
+    // Convert only up to available Traditional balance.
     if (age === inputs.conversionAge) {
-      balance = initialRothBalance
+      const amountToConvert = Math.min(inputs.conversionAmount, tradBalance)
+      const taxDue = amountToConvert * taxRate
+      tradBalance -= amountToConvert
+      rothBalance += amountToConvert - taxDue  // tax paid from IRA proceeds
+      cumulativeTaxesPaid += taxDue
     }
-    const begin = balance
-    const growth = begin * g
-    const end = begin + growth
+
+    const beginTrad = tradBalance
+    const beginRoth = rothBalance
+    const beginBalance = beginTrad + beginRoth
+
+    // RMD applies only to remaining Traditional balance
+    const rmd = calculateRMD(prevTradBalance, age, inputs.rmdStartAge)
+    const distTarget = annualDistTarget(age, dist)
+
+    // Withdrawal order:
+    // 1. RMD from Traditional (mandatory, taxable)
+    // 2. Additional from Roth to meet distribution target (tax-free)
+    // 3. Remaining Traditional if Roth insufficient
+    const additionalNeeded = Math.max(0, distTarget - rmd)
+    const rothWithdrawal = Math.min(additionalNeeded, beginRoth)
+    const extraFromTrad = Math.max(0, additionalNeeded - rothWithdrawal)
+    const totalTradWithdrawal = Math.min(beginTrad, rmd + extraFromTrad)
+
+    const tradGrowth = totalTradWithdrawal > 0
+      ? midYearGrowth(beginTrad, totalTradWithdrawal, g)
+      : beginTrad * g
+    const tradAfterGrowth = beginTrad + tradGrowth
+    const actualTradWithdrawal = Math.min(totalTradWithdrawal, tradAfterGrowth)
+    const actualRMD = Math.min(rmd, tradAfterGrowth)
+    const tradTaxes = actualTradWithdrawal * taxRate
+    const tradNetDist = actualTradWithdrawal - tradTaxes
+    const endTrad = Math.max(0, tradAfterGrowth - actualTradWithdrawal)
+
+    const rothGrowth = rothWithdrawal > 0
+      ? midYearGrowth(beginRoth, rothWithdrawal, g)
+      : beginRoth * g
+    const rothAfterGrowth = beginRoth + rothGrowth
+    const actualRothWithdrawal = Math.min(rothWithdrawal, rothAfterGrowth)
+    const endRoth = Math.max(0, rothAfterGrowth - actualRothWithdrawal)
+
+    const totalNetDist = tradNetDist + actualRothWithdrawal  // Roth portion is tax-free
+    cumulativeTaxesPaid += tradTaxes
+    cumulativeNetDist += totalNetDist
+    prevTradBalance = endTrad
+
+    tradBalance = endTrad
+    rothBalance = endRoth
 
     rows.push({
       age,
-      beginBalance: begin,
-      growth,
-      endBalance: end,
+      tradBalance: endTrad,
+      rothBalance: endRoth,
+      beginBalance,
+      growth: tradGrowth + rothGrowth,
+      rmdAmount: actualRMD,
+      taxesPaid: tradTaxes,
+      netDistribution: totalNetDist,
+      endBalance: endTrad + endRoth,
       cumulativeTaxesPaid,
-      afterTaxWealth: end,
+      afterTaxWealth: endRoth + endTrad * (1 - taxRate) + cumulativeNetDist,
+      cumulativeNetDistributions: cumulativeNetDist,
     })
-
-    balance = end
   }
 
   return rows
 }
 
-function projectRothFromCash(inputs: PlanInputs): RothFromCashYearData[] {
+function projectRothFromCash(inputs: PlanInputs, dist: DistributionInputs): RothFromCashYearData[] {
   const rows: RothFromCashYearData[] = []
   const taxRate = effectiveTaxRate(inputs)
-  const taxDue = inputs.conversionAmount * taxRate
   const g = inputs.growthRate
 
-  let balance = inputs.initialBalance
+  let tradBalance = inputs.initialBalance
+  let rothBalance = 0
+  let prevTradBalance = inputs.initialBalance
+  let cumulativeTaxesPaid = 0
+  let cumulativeNetDist = 0
+  let totalCashTaxPaid = 0  // accumulated external cash tax cost
 
   for (let age = inputs.currentAge; age <= inputs.endAge; age++) {
+    let taxPaidFromCash = 0
+
     if (age === inputs.conversionAge) {
-      balance = inputs.conversionAmount
+      const amountToConvert = Math.min(inputs.conversionAmount, tradBalance)
+      const taxDue = amountToConvert * taxRate
+      tradBalance -= amountToConvert
+      rothBalance += amountToConvert  // full amount — tax comes from external cash
+      taxPaidFromCash = taxDue
+      cumulativeTaxesPaid += taxDue
+      totalCashTaxPaid += taxDue
     }
-    const begin = balance
-    const growth = begin * g
-    const end = begin + growth
+
+    const beginTrad = tradBalance
+    const beginRoth = rothBalance
+    const beginBalance = beginTrad + beginRoth
+
+    const rmd = calculateRMD(prevTradBalance, age, inputs.rmdStartAge)
+    const distTarget = annualDistTarget(age, dist)
+
+    const additionalNeeded = Math.max(0, distTarget - rmd)
+    const rothWithdrawal = Math.min(additionalNeeded, beginRoth)
+    const extraFromTrad = Math.max(0, additionalNeeded - rothWithdrawal)
+    const totalTradWithdrawal = Math.min(beginTrad, rmd + extraFromTrad)
+
+    const tradGrowth = totalTradWithdrawal > 0
+      ? midYearGrowth(beginTrad, totalTradWithdrawal, g)
+      : beginTrad * g
+    const tradAfterGrowth = beginTrad + tradGrowth
+    const actualTradWithdrawal = Math.min(totalTradWithdrawal, tradAfterGrowth)
+    const actualRMD = Math.min(rmd, tradAfterGrowth)
+    const tradTaxes = actualTradWithdrawal * taxRate
+    const tradNetDist = actualTradWithdrawal - tradTaxes
+    const endTrad = Math.max(0, tradAfterGrowth - actualTradWithdrawal)
+
+    const rothGrowth = rothWithdrawal > 0
+      ? midYearGrowth(beginRoth, rothWithdrawal, g)
+      : beginRoth * g
+    const rothAfterGrowth = beginRoth + rothGrowth
+    const actualRothWithdrawal = Math.min(rothWithdrawal, rothAfterGrowth)
+    const endRoth = Math.max(0, rothAfterGrowth - actualRothWithdrawal)
+
+    const totalNetDist = tradNetDist + actualRothWithdrawal
+    cumulativeTaxesPaid += tradTaxes
+    cumulativeNetDist += totalNetDist
+    prevTradBalance = endTrad
+
+    tradBalance = endTrad
+    rothBalance = endRoth
+
+    const gross = endRoth + endTrad * (1 - taxRate) + cumulativeNetDist
+    const net = gross - totalCashTaxPaid  // subtract total external cash tax paid
 
     rows.push({
       age,
-      beginBalance: begin,
-      growth,
-      endBalance: end,
-      taxPaidFromCash: age === inputs.conversionAge ? taxDue : 0,
-      cumulativeTaxesPaid: taxDue,
-      afterTaxWealth: end,
+      tradBalance: endTrad,
+      rothBalance: endRoth,
+      beginBalance,
+      growth: tradGrowth + rothGrowth,
+      rmdAmount: actualRMD,
+      taxesPaid: tradTaxes,
+      netDistribution: totalNetDist,
+      endBalance: endTrad + endRoth,
+      taxPaidFromCash,
+      cumulativeTaxesPaid,
+      afterTaxWealthGross: gross,
+      afterTaxWealth: net,
+      cumulativeNetDistributions: cumulativeNetDist,
     })
-
-    balance = end
   }
 
   return rows
@@ -149,10 +263,10 @@ function findBreakeven(
   return null
 }
 
-export function runProjection(inputs: PlanInputs): ProjectionResults {
-  const traditional = projectTraditional(inputs)
-  const rothFromIRA = projectRothFromIRA(inputs)
-  const rothFromCash = projectRothFromCash(inputs)
+export function runProjection(inputs: PlanInputs, dist: DistributionInputs): ProjectionResults {
+  const traditional = projectTraditional(inputs, dist)
+  const rothFromIRA = projectRothFromIRA(inputs, dist)
+  const rothFromCash = projectRothFromCash(inputs, dist)
 
   return {
     traditional,
@@ -161,5 +275,6 @@ export function runProjection(inputs: PlanInputs): ProjectionResults {
     breakevenB: findBreakeven(traditional, rothFromIRA),
     breakevenC: findBreakeven(traditional, rothFromCash),
     inputs,
+    distInputs: dist,
   }
 }

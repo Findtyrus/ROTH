@@ -10,18 +10,16 @@ import { Dashboard } from './components/Dashboard'
 export default function App() {
   const [inputs, setInputs] = useState<PlanInputs>(DEFAULT_INPUTS)
   const [distInputs, setDistInputs] = useState<DistributionInputs>(DEFAULT_DIST_INPUTS)
-  const [results, setResults] = useState<ProjectionResults>(() => runProjection(DEFAULT_INPUTS))
+  const [results, setResults] = useState<ProjectionResults>(() => runProjection(DEFAULT_INPUTS, DEFAULT_DIST_INPUTS))
   const [distData, setDistData] = useState<DistYearData[] | null>(null)
   const [mcResults, setMcResults] = useState<MonteCarloResults | null>(null)
   const [mcLoading, setMcLoading] = useState(false)
 
-  // Re-run projection when inputs change
   useEffect(() => {
-    setResults(runProjection(inputs))
+    setResults(runProjection(inputs, distInputs))
     setMcResults(null)
-  }, [inputs])
+  }, [inputs, distInputs])
 
-  // Re-run distribution projection when inputs or dist settings change
   useEffect(() => {
     if (distInputs.enabled) {
       setDistData(projectWithDistributions(inputs, distInputs))
@@ -57,13 +55,13 @@ export default function App() {
       minHeight: '100vh',
       background: 'var(--bg-base)',
       display: 'grid',
-      gridTemplateColumns: '290px 1fr',
+      gridTemplateColumns: '300px 1fr',
       gap: 0,
     }}>
       <aside style={{
         background: 'var(--bg-surface)',
         borderRight: '1px solid var(--border)',
-        padding: 16,
+        padding: 20,
         height: '100vh',
         position: 'sticky',
         top: 0,
@@ -77,7 +75,7 @@ export default function App() {
         />
       </aside>
 
-      <main style={{ padding: '24px 28px', overflowY: 'auto', height: '100vh' }}>
+      <main style={{ padding: '28px 32px', overflowY: 'auto', height: '100vh' }}>
         <Dashboard
           results={results}
           mcResults={mcResults}

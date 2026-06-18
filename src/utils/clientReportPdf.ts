@@ -303,7 +303,7 @@ export async function generateClientReport(
       ['Conversion Age', `${inputs.conversionAge}`, 'Age at which the conversion is executed'],
       ['Projection Start Age', `${inputs.currentAge}`, ''],
       ['Projection End Age', `${inputs.endAge}`, `${inputs.endAge - inputs.currentAge}-year horizon`],
-      ['Inflation Rate', fmtPct(inputs.inflationRate), 'Informational only; all values shown in nominal dollars'],
+      ['Annual Growth Rate', fmtPct(inputs.growthRate), 'Nominal return; all values shown in nominal dollars'],
       ['Growth Formula', 'Mid-Year Withdrawal Assumption', '(Begin − Withdrawal/2) × Rate; reflects intra-year distributions'],
     ],
     headStyles: { fillColor: BLUE, textColor: 255, fontStyle: 'bold', fontSize: 9 },

@@ -4,18 +4,55 @@
   padding: 0;
 }
 
+/* ── Default: Apple light mode ── */
 :root {
+  --bg-base: #f5f5f7;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f0f0f2;
+  --bg-card: #ffffff;
+  --border: #d2d2d7;
+  --border-accent: #b0b0b8;
+
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-muted: #a0a0a5;
+
+  --blue: #0071e3;
+  --blue-light: #0077ed;
+  --blue-dim: rgba(0, 113, 227, 0.10);
+  --orange: #ff9500;
+  --orange-light: #e8860a;
+  --orange-dim: rgba(255, 149, 0, 0.10);
+  --green: #34c759;
+  --green-light: #248a3d;
+  --green-dim: rgba(52, 199, 89, 0.10);
+  --red: #ff3b30;
+  --purple: #af52de;
+
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  --shadow-card: 0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.06);
+  --shadow-glow-blue: 0 0 32px rgba(0,113,227,0.12);
+}
+
+/* ── Dark mode override ── */
+html.dark {
   --bg-base: #0a0f1e;
   --bg-surface: #111827;
   --bg-elevated: #1a2236;
   --bg-card: #1e2d45;
-  --border: rgba(99, 179, 237, 0.12);
-  --border-accent: rgba(99, 179, 237, 0.28);
-
+  --border: rgba(99, 179, 237, 0.14);
+  --border-accent: rgba(99, 179, 237, 0.30);
   --text-primary: #f0f4ff;
   --text-secondary: #94a3b8;
   --text-muted: #4a5568;
-
   --blue: #3b82f6;
   --blue-light: #60a5fa;
   --blue-dim: rgba(59, 130, 246, 0.15);
@@ -26,35 +63,7 @@
   --green-light: #34d399;
   --green-dim: rgba(16, 185, 129, 0.15);
   --red: #ef4444;
-  --purple: #8b5cf6;
-
-  --font-display: 'DM Serif Display', Georgia, serif;
-  --font-body: 'Inter', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
-
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
-
   --shadow-card: 0 4px 24px rgba(0,0,0,0.4);
-  --shadow-glow-blue: 0 0 32px rgba(59, 130, 246, 0.12);
-}
-
-html.light {
-  --bg-base: #f0f4f8;
-  --bg-surface: #ffffff;
-  --bg-elevated: #e8edf2;
-  --bg-card: #dde4ec;
-  --border: rgba(59, 130, 246, 0.18);
-  --border-accent: rgba(59, 130, 246, 0.38);
-  --text-primary: #0f172a;
-  --text-secondary: #334155;
-  --text-muted: #64748b;
-  --blue-dim: rgba(59, 130, 246, 0.10);
-  --orange-dim: rgba(245, 158, 11, 0.10);
-  --green-dim: rgba(16, 185, 129, 0.10);
-  --shadow-card: 0 4px 24px rgba(0,0,0,0.08);
 }
 
 html, body {
@@ -69,7 +78,7 @@ html, body {
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-base); }
-::-webkit-scrollbar-thumb { background: var(--bg-card); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-accent); }
 
 input[type="number"], input[type="range"], select {
@@ -87,12 +96,13 @@ input[type="range"] {
 }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: var(--blue-light);
+  background: var(--blue);
   cursor: pointer;
-  border: 2px solid var(--bg-base);
+  border: 2px solid var(--bg-surface);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
 }
 
 button {
@@ -112,6 +122,6 @@ button {
 .recharts-tooltip-label { color: var(--text-secondary) !important; }
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
-  stroke: rgba(99,179,237,0.06) !important;
+  stroke: var(--border) !important;
 }
 .recharts-text { fill: var(--text-secondary) !important; font-size: 11px; }

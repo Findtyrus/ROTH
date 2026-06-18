@@ -1,31 +1,30 @@
 import React, { useEffect, useState } from 'react'
 
 export function LightModeToggle() {
-  const [light, setLight] = useState(() => {
-    return localStorage.getItem('roth-theme') === 'light'
+  const [dark, setDark] = useState(() => {
+    return localStorage.getItem('roth-theme') === 'dark'
   })
 
   useEffect(() => {
-    if (light) {
-      document.documentElement.classList.add('light')
-      localStorage.setItem('roth-theme', 'light')
-    } else {
-      document.documentElement.classList.remove('light')
+    if (dark) {
+      document.documentElement.classList.add('dark')
       localStorage.setItem('roth-theme', 'dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+      localStorage.setItem('roth-theme', 'light')
     }
-  }, [light])
+  }, [dark])
 
-  // Apply saved theme on first mount
   useEffect(() => {
-    if (localStorage.getItem('roth-theme') === 'light') {
-      document.documentElement.classList.add('light')
+    if (localStorage.getItem('roth-theme') === 'dark') {
+      document.documentElement.classList.add('dark')
     }
   }, [])
 
   return (
     <button
-      onClick={() => setLight(l => !l)}
-      title={light ? 'Switch to dark mode' : 'Switch to light mode'}
+      onClick={() => setDark(d => !d)}
+      title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
       style={{
         background: 'var(--bg-elevated)',
         border: '1px solid var(--border)',
@@ -37,10 +36,8 @@ export function LightModeToggle() {
         transition: 'all 0.15s',
         cursor: 'pointer',
       }}
-      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--blue)')}
-      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
     >
-      {light ? '🌙' : '☀️'}
+      {dark ? '☀️' : '🌙'}
     </button>
   )
 }

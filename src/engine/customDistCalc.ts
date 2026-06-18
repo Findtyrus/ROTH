@@ -2,19 +2,14 @@ import type { PlanInputs, DistributionInputs, DistYearData } from './types'
 import { effectiveTaxRate, midYearGrowth } from './calculator'
 import { calculateRMD } from './rmdTable'
 
-/**
- * COLA-adjusted annual distribution for a given year.
- * Year 0 = distributionStartAge, increases each year by distributionIncreaseRate.
- */
 function getAnnualDist(base: number, rate: number, yearsElapsed: number): number {
   return base * Math.pow(1 + rate, yearsElapsed)
 }
 
 /**
- * Projects the Roth (from Cash) account balance under a systematic withdrawal plan
- * with annual COLA increases. Uses the mid-year withdrawal growth assumption.
- *
- * Roth distributions are tax-free — no tax applied to withdrawals.
+ * Projects the Roth (from Cash) account balance under a systematic withdrawal plan.
+ * Tracks Traditional and Roth balances separately to preserve pre-conversion growth.
+ * Distributions are taken from the Roth account (tax-free).
  */
 export function projectWithDistributions(
   inputs: PlanInputs,
@@ -24,57 +19,63 @@ export function projectWithDistributions(
   const g = inputs.growthRate
   const annualBase = dist.monthlyDistribution * 12
 
-  // Start with the full Roth (Cash) balance at conversion age
-  let balance = inputs.initialBalance
+  let tradBalance = inputs.initialBalance
+  let rothBalance = 0
   let cumulativeDist = 0
   let depleted = false
 
   for (let age = inputs.currentAge; age <= inputs.endAge; age++) {
-    // Apply Roth conversion at conversion age
+    // Apply conversion at conversion age (Roth Cash: full amount enters Roth)
     if (age === inputs.conversionAge) {
-      balance = inputs.conversionAmount
+      const amount = Math.min(inputs.conversionAmount, tradBalance)
+      tradBalance -= amount
+      rothBalance += amount
     }
 
-    const begin = balance
     const yearsElapsed = Math.max(0, age - dist.distributionStartAge)
     const takingDist = !depleted && dist.enabled && age >= dist.distributionStartAge
 
-    const annualDist = takingDist ? getAnnualDist(annualBase, dist.distributionIncreaseRate, yearsElapsed) : 0
-    const actualDist = Math.min(annualDist, begin)
+    const annualDist = takingDist
+      ? getAnnualDist(annualBase, dist.distributionIncreaseRate, yearsElapsed)
+      : 0
+    const actualDist = Math.min(annualDist, rothBalance)
 
-    const growth = actualDist > 0
-      ? midYearGrowth(begin, actualDist, g)
-      : begin * g
+    // Roth grows with mid-year assumption when distributing
+    const rothGrowth = actualDist > 0
+      ? midYearGrowth(rothBalance, actualDist, g)
+      : rothBalance * g
 
-    const end = Math.max(0, begin + growth - actualDist)
+    const endRoth = Math.max(0, rothBalance + rothGrowth - actualDist)
+
+    // Traditional continues to grow independently (no distributions taken here)
+    tradBalance = tradBalance * (1 + g)
 
     cumulativeDist += actualDist
 
-    if (end <= 0 && !depleted && takingDist) {
+    if (endRoth <= 0 && !depleted && takingDist) {
       depleted = true
     }
 
     rows.push({
       age,
-      beginBalance: begin,
+      beginBalance: rothBalance,
       annualDistribution: actualDist,
       monthlyEquivalent: actualDist / 12,
-      growth,
-      endBalance: end,
+      growth: rothGrowth,
+      endBalance: endRoth,
       cumulativeDistributions: cumulativeDist,
-      depleted: end <= 0 && actualDist > 0,
+      depleted: endRoth <= 0 && actualDist > 0,
     })
 
-    balance = end
+    rothBalance = endRoth
   }
 
   return rows
 }
 
 /**
- * Also runs a Traditional IRA with the same withdrawal amounts taken alongside RMDs.
- * If custom dist < RMD, only RMD is taken (IRS minimum). If custom dist > RMD, the
- * excess is taken as a discretionary withdrawal (also taxable).
+ * Projects Traditional IRA with systematic withdrawals alongside mandatory RMDs.
+ * If the distribution target exceeds the RMD, the excess is a voluntary taxable withdrawal.
  */
 export function projectTraditionalWithDist(
   inputs: PlanInputs,
@@ -86,7 +87,7 @@ export function projectTraditionalWithDist(
   const annualBase = dist.monthlyDistribution * 12
 
   let balance = inputs.initialBalance
-  let prevBalance = balance
+  let prevBalance = inputs.initialBalance
   let cumulativeDist = 0
   let depleted = false
 
@@ -96,22 +97,22 @@ export function projectTraditionalWithDist(
     const yearsElapsed = Math.max(0, age - dist.distributionStartAge)
     const takingDist = !depleted && dist.enabled && age >= dist.distributionStartAge
 
-    const rmdBase = age === inputs.currentAge ? begin : prevBalance
-    const rmdRaw = age === inputs.currentAge ? 0 : calculateRMD(rmdBase, age, inputs.rmdStartAge)
-    const customAmount = takingDist ? getAnnualDist(annualBase, dist.distributionIncreaseRate, yearsElapsed) : 0
+    const rmd = calculateRMD(prevBalance, age, inputs.rmdStartAge)
+    const customAmount = takingDist
+      ? getAnnualDist(annualBase, dist.distributionIncreaseRate, yearsElapsed)
+      : 0
 
-    // Total withdrawal = max(RMD, custom) since RMD is mandatory minimum
-    const totalWithdrawal = Math.min(Math.max(rmdRaw, customAmount), begin)
+    const totalWithdrawal = Math.min(Math.max(rmd, customAmount), begin)
 
     const growth = totalWithdrawal > 0
       ? midYearGrowth(begin, totalWithdrawal, g)
       : begin * g
 
-    const balanceAfterGrowth = begin + growth
-    const actualWithdrawal = Math.min(totalWithdrawal, balanceAfterGrowth)
+    const afterGrowth = begin + growth
+    const actualWithdrawal = Math.min(totalWithdrawal, afterGrowth)
     const taxes = actualWithdrawal * taxRate
     const netDist = actualWithdrawal - taxes
-    const end = Math.max(0, balanceAfterGrowth - actualWithdrawal)
+    const end = Math.max(0, afterGrowth - actualWithdrawal)
 
     cumulativeDist += netDist
     prevBalance = end

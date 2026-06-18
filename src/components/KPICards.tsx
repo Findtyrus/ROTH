@@ -1,106 +1,100 @@
 import React from 'react'
 import type { ProjectionResults } from '../engine/types'
 import { fmt, fmtFull } from '../utils/formatters'
+import { effectiveTaxRate } from '../engine/calculator'
 
 interface Props {
   results: ProjectionResults
 }
 
-interface KPICardProps {
+interface CardProps {
   label: string
   value: string
   sub?: string
-  color: 'blue' | 'orange' | 'green' | 'purple'
-  accent?: string
+  detail?: string
+  accentColor: string
+  recommended?: boolean
 }
 
-function KPICard({ label, value, sub, color, accent }: KPICardProps) {
-  const colorMap = {
-    blue: { bg: 'var(--blue-dim)', border: 'var(--blue)', text: 'var(--blue-light)' },
-    orange: { bg: 'var(--orange-dim)', border: 'var(--orange)', text: 'var(--orange-light)' },
-    green: { bg: 'var(--green-dim)', border: 'var(--green)', text: 'var(--green-light)' },
-    purple: { bg: 'rgba(139,92,246,0.15)', border: 'var(--purple)', text: '#a78bfa' },
-  }
-  const c = colorMap[color]
-
+function StrategyCard({ label, value, sub, detail, accentColor, recommended }: CardProps) {
   return (
     <div style={{
-      background: c.bg,
-      border: `1px solid ${c.border}`,
+      background: 'var(--bg-surface)',
+      border: `1px solid ${recommended ? accentColor : 'var(--border)'}`,
       borderRadius: 'var(--radius-lg)',
-      padding: '20px 24px',
+      padding: '20px 22px',
       display: 'flex',
       flexDirection: 'column',
-      gap: 4,
+      gap: 6,
       position: 'relative',
-      overflow: 'hidden',
+      boxShadow: recommended ? `0 0 0 1px ${accentColor}20, var(--shadow-card)` : 'var(--shadow-card)',
     }}>
       <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-        background: c.border, opacity: 0.6,
+        position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+        background: accentColor, borderRadius: '18px 18px 0 0',
       }} />
-      <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+      {recommended && (
+        <div style={{
+          position: 'absolute', top: 10, right: 14,
+          background: accentColor, color: '#fff',
+          fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
+          textTransform: 'uppercase', padding: '2px 7px', borderRadius: 10,
+        }}>
+          Best
+        </div>
+      )}
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 4 }}>
         {label}
       </div>
-      <div style={{ fontSize: 28, fontWeight: 700, color: c.text, lineHeight: 1.1, fontFamily: 'var(--font-mono)' }}>
+      <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.1, fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
         {value}
       </div>
       {sub && (
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-          {sub}
-        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{sub}</div>
       )}
-      {accent && (
-        <div style={{ fontSize: 11, color: c.text, marginTop: 2, fontWeight: 500 }}>
-          {accent}
-        </div>
+      {detail && (
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{detail}</div>
       )}
     </div>
   )
 }
 
 export function KPICards({ results }: Props) {
-  const { traditional, rothFromIRA, rothFromCash, breakevenB, breakevenC } = results
+  const { traditional, rothFromIRA, rothFromCash, breakevenB, breakevenC, inputs } = results
   const lastTrad = traditional[traditional.length - 1]
   const lastRothB = rothFromIRA[rothFromIRA.length - 1]
   const lastRothC = rothFromCash[rothFromCash.length - 1]
+  const taxRate = effectiveTaxRate(inputs)
 
   const bestFinal = Math.max(lastTrad.afterTaxWealth, lastRothB.afterTaxWealth, lastRothC.afterTaxWealth)
-  let bestStrategy = 'Traditional IRA'
-  if (lastRothC.afterTaxWealth === bestFinal) bestStrategy = 'Roth (Tax from Cash)'
-  else if (lastRothB.afterTaxWealth === bestFinal) bestStrategy = 'Roth (Tax from IRA)'
-
-  const wealthGain = lastRothC.afterTaxWealth - lastTrad.afterTaxWealth
+  const bestIsC = lastRothC.afterTaxWealth === bestFinal
+  const bestIsB = !bestIsC && lastRothB.afterTaxWealth === bestFinal
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-      <KPICard
-        label="Traditional IRA Final"
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+      <StrategyCard
+        label="Traditional IRA"
         value={fmt(lastTrad.afterTaxWealth)}
-        sub={`Balance at age ${results.inputs.endAge}`}
-        color="blue"
-        accent={`${fmt(lastTrad.cumulativeTaxes)} total taxes paid`}
+        sub={`After-tax wealth at age ${inputs.endAge}`}
+        detail={`${fmtFull(lastTrad.cumulativeTaxes)} total taxes paid`}
+        accentColor="var(--blue)"
+        recommended={!bestIsC && !bestIsB}
       />
-      <KPICard
-        label="Roth Final (Tax from IRA)"
+      <StrategyCard
+        label="Roth — Tax from IRA"
         value={fmt(lastRothB.afterTaxWealth)}
-        sub="After-tax wealth at end"
-        color="orange"
-        accent={`Tax cost: ${fmt(lastRothB.cumulativeTaxesPaid)}`}
+        sub={breakevenB ? `Breakeven at age ${breakevenB}` : 'No breakeven in range'}
+        detail={`${fmtFull(lastRothB.cumulativeTaxesPaid)} total taxes paid`}
+        accentColor="var(--orange)"
+        recommended={bestIsB}
       />
-      <KPICard
-        label="Roth Final (Tax from Cash)"
+      <StrategyCard
+        label="Roth — Tax from Cash"
         value={fmt(lastRothC.afterTaxWealth)}
-        sub="Full conversion, external tax"
-        color="green"
-        accent={wealthGain > 0 ? `+${fmt(wealthGain)} vs Traditional` : `${fmt(wealthGain)} vs Traditional`}
-      />
-      <KPICard
-        label="Breakeven Age"
-        value={breakevenC ? `${breakevenC}` : breakevenB ? `${breakevenB}` : 'N/A'}
-        sub={breakevenC ? 'Roth (Cash) overtakes Trad.' : breakevenB ? 'Roth (IRA) overtakes Trad.' : 'No crossover in range'}
-        color="purple"
-        accent={`Best strategy: ${bestStrategy}`}
+        sub={breakevenC ? `Breakeven at age ${breakevenC}` : 'No breakeven in range'}
+        detail={`Gross ${fmt(lastRothC.afterTaxWealthGross)} · Cash tax ${fmtFull(Math.min(inputs.conversionAmount, inputs.initialBalance) * taxRate)}`}
+        accentColor="var(--green)"
+        recommended={bestIsC}
       />
     </div>
   )

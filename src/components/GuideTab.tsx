@@ -165,22 +165,34 @@ export function GuideTab({ results, distInputs, distData }: Props) {
       <SectionHead title="5. After-Tax Wealth Comparison" sub="How we calculate true spendable wealth for each scenario" />
       <FormulaRow
         label="Traditional IRA"
-        formula="afterTaxWealth = endBalance + cumulativeNetDistributions"
-        result="Balance + all net RMDs received"
-        note="The Traditional IRA balance is pre-tax; the true after-tax picture includes the accumulation of net distributions already pocketed."
+        formula={`afterTaxWealth = endBalance × (1 − ${fmtPct(taxRate)}) + cumulativeNetDistributions`}
+        result="Liquidation value + distributions"
+        note="The remaining IRA balance is pre-tax and still owes taxes on withdrawal. We apply the effective tax rate to get its true spendable value, then add all net distributions already received."
       />
       <FormulaRow
-        label="Roth (any scenario)"
-        formula="afterTaxWealth = endBalance"
-        result="Balance is already after-tax"
-        note="Roth withdrawals are tax-free. The full account balance is spendable wealth with no further tax owed."
+        label="Roth B (Tax from IRA)"
+        formula="afterTaxWealth = rothBalance + tradBalance × (1 − taxRate) + cumulativeNetDist"
+        result="Roth is after-tax; any remaining Traditional is tax-adjusted"
+        note="If a partial conversion leaves a remaining Traditional balance, that balance is discounted by the tax rate. The Roth portion needs no discount."
+      />
+      <FormulaRow
+        label="Roth C Gross (Tax from Cash)"
+        formula="afterTaxWealthGross = rothBalance + tradBalance × (1 − taxRate) + cumulativeNetDist"
+        result="Same formula as Roth B before netting out cash cost"
+        note="Gross wealth does not account for the external cash paid to fund the conversion tax."
+      />
+      <FormulaRow
+        label="Roth C Net (Tax from Cash)"
+        formula={`afterTaxWealth = gross − ${fmtFull(inputs.conversionAmount * taxRate)}`}
+        result="Net of external tax cost"
+        note="The cash used to pay conversion tax came from outside the account. Subtracting it gives a fair apples-to-apples comparison against Traditional — both strategies started with the same total resources."
       />
       {beRow && rothCBeRow && (
         <FormulaRow
           label={`At breakeven (age ${results.breakevenC})`}
-          formula={`Trad: ${fmtFull(beRow.afterTaxWealth)}  vs  Roth C: ${fmtFull(rothCBeRow.afterTaxWealth)}`}
+          formula={`Trad: ${fmtFull(beRow.afterTaxWealth)}  vs  Roth C net: ${fmtFull(rothCBeRow.afterTaxWealth)}`}
           result="Roth first exceeds Traditional"
-          note="This is the first year Roth (Cash) after-tax wealth surpasses the Traditional. After this point, every additional year compounds the Roth's advantage."
+          note="This is the first year Roth (Cash) net after-tax wealth surpasses the corrected Traditional value. Both figures reflect true liquidation value."
         />
       )}
 

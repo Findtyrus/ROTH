@@ -11,40 +11,58 @@ function randn(): number {
 function simulateTraditional(inputs: PlanInputs, annualReturns: number[]): number[] {
   const taxRate = Math.min(inputs.federalTaxRate + inputs.stateTaxRate, 0.85)
   let balance = inputs.initialBalance
-  let prevBalance = balance
+  let prevBalance = inputs.initialBalance  // prior year-end balance for RMD
   let cumulativeNetDist = 0
   const results: number[] = []
 
   for (let i = 0; i < annualReturns.length; i++) {
     const age = inputs.currentAge + i
     const begin = balance
-    const growth = begin * annualReturns[i]
-    const balanceBeforeRMD = begin + growth
 
-    const rmdBase = i === 0 ? begin : prevBalance
-    const rmd = i === 0 ? 0 : calculateRMD(rmdBase, age, inputs.rmdStartAge)
-    const actualRMD = Math.min(rmd, balanceBeforeRMD)
-    const netDist = actualRMD * (1 - taxRate)
+    const rmd = calculateRMD(prevBalance, age, inputs.rmdStartAge)
+    const actualRMD = Math.min(rmd, begin)
 
-    prevBalance = balanceBeforeRMD - actualRMD
+    // Mid-year growth consistent with deterministic calculator
+    const growth = actualRMD > 0
+      ? Math.max(0, begin - actualRMD / 2) * annualReturns[i]
+      : begin * annualReturns[i]
+
+    const afterGrowth = begin + growth
+    const realRMD = Math.min(actualRMD, afterGrowth)
+    const netDist = realRMD * (1 - taxRate)
+
+    prevBalance = Math.max(0, afterGrowth - realRMD)
     balance = prevBalance
     cumulativeNetDist += netDist
-    results.push(Math.max(0, balance + cumulativeNetDist))
+
+    // Corrected after-tax wealth: liquidation value + cumulative net distributions
+    results.push(Math.max(0, balance * (1 - taxRate) + cumulativeNetDist))
   }
   return results
 }
 
 function simulateRothCash(inputs: PlanInputs, annualReturns: number[]): number[] {
-  let balance = inputs.initialBalance
+  const taxRate = Math.min(inputs.federalTaxRate + inputs.stateTaxRate, 0.85)
+  let tradBalance = inputs.initialBalance
+  let rothBalance = 0
+  const totalCashTaxPaid = Math.min(inputs.conversionAmount, inputs.initialBalance) * taxRate
   const results: number[] = []
 
   for (let i = 0; i < annualReturns.length; i++) {
     const age = inputs.currentAge + i
+
+    // Apply conversion at conversion age (preserves pre-conversion growth)
     if (age === inputs.conversionAge) {
-      balance = inputs.conversionAmount
+      const amount = Math.min(inputs.conversionAmount, tradBalance)
+      tradBalance -= amount
+      rothBalance += amount  // full amount, tax paid from external cash
     }
-    balance = balance + balance * annualReturns[i]
-    results.push(Math.max(0, balance))
+
+    tradBalance = Math.max(0, tradBalance * (1 + annualReturns[i]))
+    rothBalance = Math.max(0, rothBalance * (1 + annualReturns[i]))
+
+    // Net after-tax wealth: Roth (full) + trad liquidation - cash tax paid
+    results.push(Math.max(0, rothBalance + tradBalance * (1 - taxRate) - totalCashTaxPaid))
   }
   return results
 }
