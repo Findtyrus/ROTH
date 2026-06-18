@@ -205,13 +205,13 @@ export function ControlPanel({ inputs, onChange, distInputs, onDistChange, filin
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span>Tax due on conversion</span>
             <strong style={{ color: 'var(--orange)', fontFamily: 'var(--font-mono)' }}>
-              {fmtFull(inputs.conversionAmount * taxRate)}
+              {fmtFull(Math.min(inputs.conversionAmount, inputs.initialBalance) * taxRate)}
             </strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span>Roth B starting balance</span>
             <strong style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-              {fmtFull(inputs.conversionAmount * (1 - taxRate))}
+              {fmtFull(Math.min(inputs.conversionAmount, inputs.initialBalance) * (1 - taxRate))}
             </strong>
           </div>
         </div>

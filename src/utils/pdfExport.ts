@@ -70,7 +70,6 @@ export function exportToPDF(results: ProjectionResults): void {
       ['RMD Start Age', `${inputs.rmdStartAge}`],
       ['Conversion Amount', fmtFull(inputs.conversionAmount)],
       ['Conversion Age', `${inputs.conversionAge}`],
-      ['Growth Rate', fmtPct(inputs.growthRate)],
     ],
     headStyles: { fillColor: blue, textColor: 255 },
     margin: { left: 14, right: 14 },

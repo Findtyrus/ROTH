@@ -94,29 +94,39 @@ function projectRothFromIRA(inputs: PlanInputs, dist: DistributionInputs): RothF
   let cumulativeNetDist = 0
 
   for (let age = inputs.currentAge; age <= inputs.endAge; age++) {
-    // Apply conversion at the start of the conversion year.
-    // Convert only up to available Traditional balance.
+    // IRS rule: in an RMD year, the RMD must be taken BEFORE a Roth conversion.
+    // Amounts that satisfy the RMD cannot be rolled into a Roth.
+    let preConvRMD = 0
+    let preConvRMDTax = 0
+    if (age === inputs.conversionAge && age >= inputs.rmdStartAge) {
+      preConvRMD = Math.min(calculateRMD(prevTradBalance, age, inputs.rmdStartAge), tradBalance)
+      preConvRMDTax = preConvRMD * taxRate
+      tradBalance -= preConvRMD
+      cumulativeTaxesPaid += preConvRMDTax
+      cumulativeNetDist += preConvRMD - preConvRMDTax
+    }
+
+    // Apply conversion after mandatory RMD has been satisfied.
+    let conversionTaxThisYear = 0
     if (age === inputs.conversionAge) {
       const amountToConvert = Math.min(inputs.conversionAmount, tradBalance)
       const taxDue = amountToConvert * taxRate
       tradBalance -= amountToConvert
       rothBalance += amountToConvert - taxDue  // tax paid from IRA proceeds
       cumulativeTaxesPaid += taxDue
+      conversionTaxThisYear = taxDue
     }
 
     const beginTrad = tradBalance
     const beginRoth = rothBalance
     const beginBalance = beginTrad + beginRoth
 
-    // RMD applies only to remaining Traditional balance
-    const rmd = calculateRMD(prevTradBalance, age, inputs.rmdStartAge)
+    // RMD from Traditional: 0 in the conversion year if already taken above.
+    const rmd = preConvRMD > 0 ? 0 : calculateRMD(prevTradBalance, age, inputs.rmdStartAge)
     const distTarget = annualDistTarget(age, dist)
 
-    // Withdrawal order:
-    // 1. RMD from Traditional (mandatory, taxable)
-    // 2. Additional from Roth to meet distribution target (tax-free)
-    // 3. Remaining Traditional if Roth insufficient
-    const additionalNeeded = Math.max(0, distTarget - rmd)
+    // preConvRMD already counts toward the distribution target for this year.
+    const additionalNeeded = Math.max(0, distTarget - rmd - preConvRMD)
     const rothWithdrawal = Math.min(additionalNeeded, beginRoth)
     const extraFromTrad = Math.max(0, additionalNeeded - rothWithdrawal)
     const totalTradWithdrawal = Math.min(beginTrad, rmd + extraFromTrad)
@@ -152,9 +162,9 @@ function projectRothFromIRA(inputs: PlanInputs, dist: DistributionInputs): RothF
       rothBalance: endRoth,
       beginBalance,
       growth: tradGrowth + rothGrowth,
-      rmdAmount: actualRMD,
-      taxesPaid: tradTaxes,
-      netDistribution: totalNetDist,
+      rmdAmount: preConvRMD > 0 ? preConvRMD : actualRMD,
+      taxesPaid: preConvRMDTax + conversionTaxThisYear + tradTaxes,
+      netDistribution: (preConvRMD - preConvRMDTax) + totalNetDist,
       endBalance: endTrad + endRoth,
       cumulativeTaxesPaid,
       afterTaxWealth: endRoth + endTrad * (1 - taxRate) + cumulativeNetDist,
@@ -180,6 +190,17 @@ function projectRothFromCash(inputs: PlanInputs, dist: DistributionInputs): Roth
   for (let age = inputs.currentAge; age <= inputs.endAge; age++) {
     let taxPaidFromCash = 0
 
+    // IRS rule: in an RMD year, the RMD must be taken BEFORE a Roth conversion.
+    let preConvRMD = 0
+    let preConvRMDTax = 0
+    if (age === inputs.conversionAge && age >= inputs.rmdStartAge) {
+      preConvRMD = Math.min(calculateRMD(prevTradBalance, age, inputs.rmdStartAge), tradBalance)
+      preConvRMDTax = preConvRMD * taxRate
+      tradBalance -= preConvRMD
+      cumulativeTaxesPaid += preConvRMDTax
+      cumulativeNetDist += preConvRMD - preConvRMDTax
+    }
+
     if (age === inputs.conversionAge) {
       const amountToConvert = Math.min(inputs.conversionAmount, tradBalance)
       const taxDue = amountToConvert * taxRate
@@ -194,10 +215,10 @@ function projectRothFromCash(inputs: PlanInputs, dist: DistributionInputs): Roth
     const beginRoth = rothBalance
     const beginBalance = beginTrad + beginRoth
 
-    const rmd = calculateRMD(prevTradBalance, age, inputs.rmdStartAge)
+    const rmd = preConvRMD > 0 ? 0 : calculateRMD(prevTradBalance, age, inputs.rmdStartAge)
     const distTarget = annualDistTarget(age, dist)
 
-    const additionalNeeded = Math.max(0, distTarget - rmd)
+    const additionalNeeded = Math.max(0, distTarget - rmd - preConvRMD)
     const rothWithdrawal = Math.min(additionalNeeded, beginRoth)
     const extraFromTrad = Math.max(0, additionalNeeded - rothWithdrawal)
     const totalTradWithdrawal = Math.min(beginTrad, rmd + extraFromTrad)
@@ -228,7 +249,7 @@ function projectRothFromCash(inputs: PlanInputs, dist: DistributionInputs): Roth
     rothBalance = endRoth
 
     const gross = endRoth + endTrad * (1 - taxRate) + cumulativeNetDist
-    const net = gross - totalCashTaxPaid  // subtract total external cash tax paid
+    const net = gross - totalCashTaxPaid
 
     rows.push({
       age,
@@ -236,9 +257,9 @@ function projectRothFromCash(inputs: PlanInputs, dist: DistributionInputs): Roth
       rothBalance: endRoth,
       beginBalance,
       growth: tradGrowth + rothGrowth,
-      rmdAmount: actualRMD,
-      taxesPaid: tradTaxes,
-      netDistribution: totalNetDist,
+      rmdAmount: preConvRMD > 0 ? preConvRMD : actualRMD,
+      taxesPaid: preConvRMDTax + taxPaidFromCash + tradTaxes,
+      netDistribution: (preConvRMD - preConvRMDTax) + totalNetDist,
       endBalance: endTrad + endRoth,
       taxPaidFromCash,
       cumulativeTaxesPaid,

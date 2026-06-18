@@ -227,7 +227,7 @@ export function Dashboard({ results, mcResults, mcLoading, distInputs, distData,
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
           {bestStrategy === 'Traditional IRA'
             ? `At a ${Math.round(taxRate * 100)}% combined tax rate, the Roth conversion cost exceeds the benefit of tax-free growth within the ${inputs.endAge - inputs.currentAge}-year window. The Traditional IRA produces better after-tax outcomes under these assumptions.`
-            : `Converting to a Roth at age ${inputs.conversionAge} with a ${Math.round(taxRate * 100)}% tax rate costs ${fmtFull(inputs.conversionAmount * taxRate)} upfront${bestStrategy.includes('Cash') ? ' (paid from external cash)' : ' (deducted from the IRA)'}. The Roth's tax-free compounding then overtakes the Traditional${bestBreakeven ? ` at age ${bestBreakeven}` : ''} and builds a ${fmt(advantage)} advantage by age ${inputs.endAge}.`
+            : `Converting to a Roth at age ${inputs.conversionAge} with a ${Math.round(taxRate * 100)}% tax rate costs ${fmtFull(Math.min(inputs.conversionAmount, inputs.initialBalance) * taxRate)} upfront${bestStrategy.includes('Cash') ? ' (paid from external cash)' : ' (deducted from the IRA)'}. The Roth's tax-free compounding then overtakes the Traditional${bestBreakeven ? ` at age ${bestBreakeven}` : ''} and builds a ${fmt(advantage)} advantage by age ${inputs.endAge}.`
           }
         </p>
       </Card>

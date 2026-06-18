@@ -36,12 +36,12 @@ export default function App() {
     setMcResults(null)
     setTimeout(() => {
       try {
-        setMcResults(runMonteCarlo(inputs, 1000, 0.12))
+        setMcResults(runMonteCarlo(inputs, distInputs, 1000, 0.12))
       } finally {
         setMcLoading(false)
       }
     }, 20)
-  }, [inputs])
+  }, [inputs, distInputs])
 
   useEffect(() => {
     const t = setTimeout(runMC, 400)

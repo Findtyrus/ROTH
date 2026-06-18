@@ -162,7 +162,7 @@ export function ExplainerTab() {
           <Row label="Conversion">Full conversionAmount enters the Roth; tax paid from savings/checking</Row>
           <Row label="Example">$2M at 37% → $740K paid from cash → $2M enters Roth</Row>
           <Row label="After conversion">Roth grows tax-free, no RMDs, no future distributions taxed</Row>
-          <Row label="After-Tax Wealth">Roth balance (external tax cost is a real out-of-pocket cost but not deducted here)</Row>
+          <Row label="After-Tax Wealth">Roth balance + cumulative net distributions − total cash taxes paid upfront. The external tax cost is fully deducted from the wealth figure.</Row>
         </div>
         <Callout color="green">
           This is the most powerful scenario if you have outside funds to cover the tax bill.
@@ -293,10 +293,8 @@ export function ExplainerTab() {
           <Row label="End Age">How far to project. Longer horizons generally favor Roth conversion.</Row>
           <Row label="Initial IRA Balance">Pre-tax balance in your Traditional IRA today.</Row>
           <Row label="Annual Growth Rate">Assumed average annual return, applied uniformly each year (deterministic model). Monte Carlo varies this.</Row>
-          <Row label="Inflation Rate">Currently informational — displayed but not applied to deflate real values. Set to 0 for nominal projections.</Row>
           <Row label="Federal Tax Rate">Your marginal federal income tax rate at the time of conversion. Applies to both the conversion event and future RMDs.</Row>
           <Row label="State Tax Rate">Your state marginal rate. Combined with federal (capped at 85% total) for the effective rate.</Row>
-          <Row label="Capital Gains Rate">Not currently applied to IRA projections (IRA distributions are ordinary income). Reserved for future taxable account modeling.</Row>
           <Row label="RMD Start Age">Age at which RMDs begin. SECURE 2.0 (2023) raised this to 73; scheduled to rise to 75 in 2033.</Row>
           <Row label="Conversion Amount">The dollar amount converted to Roth. Default equals the full Initial Balance for a complete conversion analysis.</Row>
           <Row label="Conversion Age">Age at which the conversion occurs. Must be ≥ your current age. Earlier conversions maximize Roth compounding time.</Row>

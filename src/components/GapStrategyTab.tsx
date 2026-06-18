@@ -1,4 +1,3 @@
-import React from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import type { PlanInputs } from '../engine/types'
 import type { FilingStatus } from '../engine/taxBrackets'
@@ -72,11 +71,13 @@ export function GapStrategyTab({ inputs, filingStatus, existingIncome }: Props) 
     ? Math.min(pos.roomToNextBracket, inputs.initialBalance)
     : 0
 
+  // When nextBracketWidth is null (e.g., currently in 35% — next bracket is 37% with no ceiling),
+  // "fill current + next" means converting everything, so s2Amount = full balance.
   const s2Amount = pos.roomToNextBracket > 0 && pos.nextBracketWidth !== null
     ? Math.min(pos.roomToNextBracket + pos.nextBracketWidth, inputs.initialBalance)
     : pos.roomToNextBracket > 0
-      ? Math.min(pos.roomToNextBracket, inputs.initialBalance)
-      : Math.min(inputs.initialBalance, inputs.initialBalance)
+      ? inputs.initialBalance
+      : inputs.initialBalance
 
   const s3Amount = inputs.initialBalance
 
@@ -94,6 +95,8 @@ export function GapStrategyTab({ inputs, filingStatus, existingIncome }: Props) 
 
   const inTopBracket = pos.nextBracketRate === null
   const hasRoom = pos.roomToNextBracket > 0
+  // nextBracketWidth is null when the next bracket (37%) has no upper ceiling
+  const s2MatchesS3 = pos.roomToNextBracket > 0 && pos.nextBracketWidth === null
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null
@@ -194,6 +197,12 @@ export function GapStrategyTab({ inputs, filingStatus, existingIncome }: Props) 
         ))}
       </div>
 
+      {s2MatchesS3 && (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', background: 'rgba(255,149,0,0.08)', border: '1px solid rgba(255,149,0,0.25)', borderRadius: 8, padding: '8px 12px', lineHeight: 1.6 }}>
+          <strong style={{ color: 'var(--orange)' }}>Strategy 2 = Strategy 3:</strong> The next bracket (37%) has no upper limit, so "fill current + next bracket" means converting the entire balance. Strategies 2 and 3 are identical in this bracket position.
+        </div>
+      )}
+
       {/* Bar Chart */}
       <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px 24px' }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Tax Owed by Strategy</div>
@@ -206,7 +215,7 @@ export function GapStrategyTab({ inputs, filingStatus, existingIncome }: Props) 
               tick={{ fontSize: 12, fill: 'var(--text-secondary)' }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(_, i) => strategies[i]?.label ?? ''}
+              tickFormatter={(_, i) => strategies[i]?.shortLabel ?? ''}
             />
             <YAxis
               tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
