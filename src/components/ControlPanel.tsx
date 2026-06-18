@@ -1,13 +1,26 @@
 import React, { useState } from 'react'
 import type { PlanInputs, DistributionInputs } from '../engine/types'
+import type { FilingStatus } from '../engine/taxBrackets'
+import { calculateConversionTax } from '../engine/taxBrackets'
 import { fmtFull, fmtPct } from '../utils/formatters'
 import { effectiveTaxRate } from '../engine/calculator'
+
+const FILING_OPTIONS: { value: FilingStatus; label: string }[] = [
+  { value: 'married_joint', label: 'Married Filing Jointly' },
+  { value: 'single', label: 'Single' },
+  { value: 'married_separate', label: 'Married Filing Separately' },
+  { value: 'head_of_household', label: 'Head of Household' },
+]
 
 interface Props {
   inputs: PlanInputs
   onChange: (inputs: PlanInputs) => void
   distInputs: DistributionInputs
   onDistChange: (d: DistributionInputs) => void
+  filingStatus: FilingStatus
+  onFilingStatusChange: (s: FilingStatus) => void
+  existingIncome: number
+  onExistingIncomeChange: (n: number) => void
 }
 
 function Section({ title, children, defaultOpen = true }: {
@@ -112,7 +125,7 @@ function NumberField({
   )
 }
 
-export function ControlPanel({ inputs, onChange, distInputs, onDistChange }: Props) {
+export function ControlPanel({ inputs, onChange, distInputs, onDistChange, filingStatus, onFilingStatusChange, existingIncome, onExistingIncomeChange }: Props) {
   const set = <K extends keyof PlanInputs>(key: K, val: PlanInputs[K]) =>
     onChange({ ...inputs, [key]: val })
   const setDist = <K extends keyof DistributionInputs>(key: K, val: DistributionInputs[K]) =>
@@ -209,6 +222,102 @@ export function ControlPanel({ inputs, onChange, distInputs, onDistChange }: Pro
           label="RMD Start Age" value={inputs.rmdStartAge} min={70} max={80}
           format={v => `${v}`} onChange={v => set('rmdStartAge', v)}
         />
+      </Section>
+
+      <Section title="Tax Bracket Calculator" defaultOpen={false}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+              Filing Status
+            </label>
+            <select
+              value={filingStatus}
+              onChange={e => onFilingStatusChange(e.target.value as FilingStatus)}
+              style={{
+                width: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', padding: '8px 10px',
+                fontSize: 12, outline: 'none', cursor: 'pointer',
+              }}
+            >
+              {FILING_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <NumberField
+            label="Existing Taxable Income"
+            value={existingIncome}
+            onChange={onExistingIncomeChange}
+          />
+          {(() => {
+            const r = calculateConversionTax(existingIncome, inputs.conversionAmount, filingStatus, inputs.stateTaxRate)
+            const flatEstimate = inputs.conversionAmount * effectiveTaxRate(inputs)
+            const savings = flatEstimate - r.totalTaxOnConversion
+            return (
+              <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Bracket before conversion</span>
+                  <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{fmtPct(r.bracketBeforeConversion)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Bracket after conversion</span>
+                  <strong style={{ fontFamily: 'var(--font-mono)', color: r.pushedIntoHigherBracket ? 'var(--orange)' : 'var(--text-secondary)' }}>{fmtPct(r.bracketAfterConversion)}</strong>
+                </div>
+                {r.pushedIntoHigherBracket && (
+                  <div style={{ fontSize: 10, color: 'var(--orange)', background: 'rgba(255,149,0,0.08)', borderRadius: 6, padding: '4px 8px', marginTop: 2 }}>
+                    Conversion enters a higher bracket
+                  </div>
+                )}
+                <div style={{ borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Federal tax on conversion</span>
+                    <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{fmtFull(r.federalTaxOnConversion)}</strong>
+                  </div>
+                  {inputs.stateTaxRate > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>State tax ({fmtPct(inputs.stateTaxRate)})</span>
+                      <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{fmtFull(r.stateTaxOnConversion)}</strong>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Total tax due</span>
+                    <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--orange)' }}>{fmtFull(r.totalTaxOnConversion)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Effective rate</span>
+                    <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{fmtPct(r.effectiveRateOnConversion)}</strong>
+                  </div>
+                </div>
+                <div style={{ borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Flat-rate estimate ({fmtPct(effectiveTaxRate(inputs))})</span>
+                    <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{fmtFull(flatEstimate)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Graduated vs. flat</span>
+                    <strong style={{ fontFamily: 'var(--font-mono)', color: savings > 0 ? 'var(--green)' : 'var(--red, #ff3b30)' }}>
+                      {savings >= 0 ? '−' : '+'}{fmtFull(Math.abs(savings))}
+                    </strong>
+                  </div>
+                </div>
+                {r.bracketBreakdown.length > 0 && (
+                  <div style={{ borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 6 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5 }}>Bracket Breakdown</div>
+                    {r.bracketBreakdown.map((b, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>
+                        <span>{fmtPct(b.rate)} × {fmtFull(b.amountInBracket)}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)' }}>{fmtFull(b.taxInBracket)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5, borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+                  Informational only — main projections use the flat tax rate above.
+                </div>
+              </div>
+            )
+          })()}
+        </div>
       </Section>
 
       <Section title="Monthly Withdrawals">

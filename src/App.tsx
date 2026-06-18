@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { DEFAULT_INPUTS, DEFAULT_DIST_INPUTS } from './engine/types'
 import type { PlanInputs, DistributionInputs, ProjectionResults, MonteCarloResults, DistYearData } from './engine/types'
+import type { FilingStatus } from './engine/taxBrackets'
 import { runProjection } from './engine/calculator'
 import { runMonteCarlo } from './engine/monteCarlo'
 import { projectWithDistributions } from './engine/customDistCalc'
@@ -14,6 +15,8 @@ export default function App() {
   const [distData, setDistData] = useState<DistYearData[] | null>(null)
   const [mcResults, setMcResults] = useState<MonteCarloResults | null>(null)
   const [mcLoading, setMcLoading] = useState(false)
+  const [filingStatus, setFilingStatus] = useState<FilingStatus>('married_joint')
+  const [existingIncome, setExistingIncome] = useState(80_000)
 
   useEffect(() => {
     setResults(runProjection(inputs, distInputs))
@@ -72,6 +75,10 @@ export default function App() {
           onChange={setInputs}
           distInputs={distInputs}
           onDistChange={setDistInputs}
+          filingStatus={filingStatus}
+          onFilingStatusChange={setFilingStatus}
+          existingIncome={existingIncome}
+          onExistingIncomeChange={setExistingIncome}
         />
       </aside>
 
@@ -84,6 +91,8 @@ export default function App() {
           distData={distData}
           onLoadClient={handleLoadClient}
           currentInputs={inputs}
+          filingStatus={filingStatus}
+          existingIncome={existingIncome}
         />
       </main>
     </div>

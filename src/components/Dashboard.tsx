@@ -15,6 +15,8 @@ import { ProjectionTable } from './tables/ProjectionTable'
 import { ExplainerTab } from './ExplainerTab'
 import { GuideTab } from './GuideTab'
 import { CRMTab } from './CRMTab'
+import { GapStrategyTab } from './GapStrategyTab'
+import type { FilingStatus } from '../engine/taxBrackets'
 import { generateClientReport } from '../utils/clientReportPdf'
 import { fmt, fmtFull } from '../utils/formatters'
 
@@ -26,14 +28,17 @@ interface Props {
   distData: DistYearData[] | null
   onLoadClient: (inputs: any, distInputs: any) => void
   currentInputs: any
+  filingStatus: FilingStatus
+  existingIncome: number
 }
 
-type MainTab = 'overview' | 'distributions' | 'montecarlo' | 'table' | 'math' | 'guide' | 'crm'
+type MainTab = 'overview' | 'distributions' | 'gapstrategy' | 'montecarlo' | 'table' | 'math' | 'guide' | 'crm'
 type ChartView = 'wealth' | 'balance' | 'taxes' | 'rmd' | 'breakeven'
 
 const MAIN_TABS: { key: MainTab; label: string }[] = [
   { key: 'overview', label: 'Charts' },
   { key: 'distributions', label: 'Distributions' },
+  { key: 'gapstrategy', label: 'Gap Strategy' },
   { key: 'montecarlo', label: 'Monte Carlo' },
   { key: 'table', label: 'Data Table' },
   { key: 'math', label: 'Math Guide' },
@@ -90,7 +95,7 @@ function CardSection({ title, sub, children, cardRef }: {
   )
 }
 
-export function Dashboard({ results, mcResults, mcLoading, distInputs, distData, onLoadClient, currentInputs }: Props) {
+export function Dashboard({ results, mcResults, mcLoading, distInputs, distData, onLoadClient, currentInputs, filingStatus, existingIncome }: Props) {
   const [activeTab, setActiveTab] = useState<MainTab>('overview')
   const [chartView, setChartView] = useState<ChartView>('wealth')
   const [showReportModal, setShowReportModal] = useState(false)
@@ -350,6 +355,13 @@ export function Dashboard({ results, mcResults, mcLoading, distInputs, distData,
             <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>Computing…</div>
           )}
         </div>
+      )}
+
+      {/* ── GAP STRATEGY TAB ── */}
+      {activeTab === 'gapstrategy' && (
+        <Card style={{ padding: '28px 32px' }}>
+          <GapStrategyTab inputs={inputs} filingStatus={filingStatus} existingIncome={existingIncome} />
+        </Card>
       )}
 
       {/* ── MONTE CARLO TAB ── */}
