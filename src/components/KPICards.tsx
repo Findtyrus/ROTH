@@ -1,4 +1,3 @@
-import React from 'react'
 import type { ProjectionResults } from '../engine/types'
 import { fmt, fmtFull } from '../utils/formatters'
 import { effectiveTaxRate } from '../engine/calculator'
@@ -12,11 +11,12 @@ interface CardProps {
   value: string
   sub?: string
   detail?: string
+  disclaimer?: string
   accentColor: string
   recommended?: boolean
 }
 
-function StrategyCard({ label, value, sub, detail, accentColor, recommended }: CardProps) {
+function StrategyCard({ label, value, sub, detail, disclaimer, accentColor, recommended }: CardProps) {
   return (
     <div style={{
       background: 'var(--bg-surface)',
@@ -55,30 +55,41 @@ function StrategyCard({ label, value, sub, detail, accentColor, recommended }: C
       {detail && (
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{detail}</div>
       )}
+      {disclaimer && (
+        <div style={{
+          fontSize: 10, color: 'var(--text-muted)', marginTop: 4,
+          padding: '5px 8px', background: 'var(--bg-elevated)',
+          borderRadius: 6, lineHeight: 1.5, borderLeft: `2px solid ${accentColor}`,
+        }}>
+          {disclaimer}
+        </div>
+      )}
     </div>
   )
 }
 
 export function KPICards({ results }: Props) {
-  const { traditional, rothFromIRA, rothFromCash, breakevenB, breakevenC, inputs } = results
+  const { traditional, rothFromIRA, rothFromCash, rothFromIRAWithSide, breakevenB, breakevenC, breakevenD, inputs } = results
   const lastTrad = traditional[traditional.length - 1]
   const lastRothB = rothFromIRA[rothFromIRA.length - 1]
   const lastRothC = rothFromCash[rothFromCash.length - 1]
+  const lastRothD = rothFromIRAWithSide[rothFromIRAWithSide.length - 1]
   const taxRate = effectiveTaxRate(inputs)
 
-  const bestFinal = Math.max(lastTrad.afterTaxWealth, lastRothB.afterTaxWealth, lastRothC.afterTaxWealth)
-  const bestIsC = lastRothC.afterTaxWealth === bestFinal
-  const bestIsB = !bestIsC && lastRothB.afterTaxWealth === bestFinal
+  const bestFinal = Math.max(lastTrad.afterTaxWealth, lastRothB.afterTaxWealth, lastRothC.afterTaxWealth, lastRothD.afterTaxWealth)
+  const bestIsD = lastRothD.afterTaxWealth === bestFinal
+  const bestIsC = !bestIsD && lastRothC.afterTaxWealth === bestFinal
+  const bestIsB = !bestIsD && !bestIsC && lastRothB.afterTaxWealth === bestFinal
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14 }}>
       <StrategyCard
         label="Traditional IRA"
         value={fmt(lastTrad.afterTaxWealth)}
         sub={`After-tax wealth at age ${inputs.endAge}`}
         detail={`${fmtFull(lastTrad.cumulativeTaxes)} total taxes paid`}
         accentColor="var(--blue)"
-        recommended={!bestIsC && !bestIsB}
+        recommended={!bestIsC && !bestIsB && !bestIsD}
       />
       <StrategyCard
         label="Roth — Tax from IRA"
@@ -95,6 +106,15 @@ export function KPICards({ results }: Props) {
         detail={`Gross ${fmt(lastRothC.afterTaxWealthGross)} · Cash tax ${fmtFull(Math.min(inputs.conversionAmount, inputs.initialBalance) * taxRate)}`}
         accentColor="var(--green)"
         recommended={bestIsC}
+      />
+      <StrategyCard
+        label="Roth — IRA Tax + Cash Invested"
+        value={fmt(lastRothD.afterTaxWealth)}
+        sub={breakevenD ? `Breakeven at age ${breakevenD}` : 'No breakeven in range'}
+        detail={`Roth ${fmt(lastRothB.afterTaxWealth)} · Side account ${fmt(lastRothD.sideAccountBalance)}`}
+        disclaimer="Side account invested separately, not used for withdrawals"
+        accentColor="var(--purple, #bf5af2)"
+        recommended={bestIsD}
       />
     </div>
   )

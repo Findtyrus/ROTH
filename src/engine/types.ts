@@ -56,12 +56,31 @@ export interface RothFromCashYearData {
   cumulativeNetDistributions: number
 }
 
+export interface RothFromIRAWithSideYearData {
+  age: number
+  tradBalance: number
+  rothBalance: number
+  beginBalance: number
+  growth: number
+  rmdAmount: number
+  taxesPaid: number
+  netDistribution: number
+  endBalance: number
+  cumulativeTaxesPaid: number
+  sideAccountBalance: number   // external cash invested separately, grows at portfolio rate
+  sideAccountGrowth: number
+  afterTaxWealth: number       // rothB ATW + sideAccountBalance (total Roth D wealth)
+  cumulativeNetDistributions: number
+}
+
 export interface ProjectionResults {
   traditional: TraditionalYearData[]
   rothFromIRA: RothFromIRAYearData[]
   rothFromCash: RothFromCashYearData[]
+  rothFromIRAWithSide: RothFromIRAWithSideYearData[]
   breakevenB: number | null
   breakevenC: number | null
+  breakevenD: number | null
   inputs: PlanInputs
   distInputs: DistributionInputs
 }

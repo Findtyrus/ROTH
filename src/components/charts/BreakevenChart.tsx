@@ -1,4 +1,3 @@
-import React from 'react'
 import {
   ResponsiveContainer, ComposedChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ReferenceLine,
@@ -9,14 +8,13 @@ import { axisFmt, fmtFull } from '../../utils/formatters'
 interface Props { results: ProjectionResults }
 
 export function BreakevenChart({ results }: Props) {
-  const { traditional, rothFromIRA, rothFromCash, breakevenB, breakevenC } = results
+  const { traditional, rothFromIRA, rothFromCash, rothFromIRAWithSide, breakevenB, breakevenC, breakevenD } = results
 
-  // Both use corrected afterTaxWealth: Traditional reflects liquidation value,
-  // Roth C uses net wealth (gross minus external cash tax paid)
   const data = traditional.map((t, i) => ({
     age: t.age,
     deltaC: Math.round(rothFromCash[i].afterTaxWealth - t.afterTaxWealth),
     deltaB: Math.round(rothFromIRA[i].afterTaxWealth - t.afterTaxWealth),
+    deltaD: Math.round(rothFromIRAWithSide[i].afterTaxWealth - t.afterTaxWealth),
   }))
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -24,7 +22,7 @@ export function BreakevenChart({ results }: Props) {
     return (
       <div style={{
         background: 'var(--bg-card)', border: '1px solid var(--border-accent)',
-        borderRadius: 'var(--radius-md)', padding: '12px 16px', minWidth: 240,
+        borderRadius: 'var(--radius-md)', padding: '12px 16px', minWidth: 260,
       }}>
         <div style={{ color: 'var(--text-secondary)', fontSize: 11, marginBottom: 8 }}>
           Age {label} — Roth advantage over Traditional
@@ -45,7 +43,7 @@ export function BreakevenChart({ results }: Props) {
   }
 
   return (
-    <div style={{ width: '100%', height: 300 }}>
+    <div style={{ width: '100%', height: 320 }}>
       <ResponsiveContainer>
         <ComposedChart data={data} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -56,13 +54,18 @@ export function BreakevenChart({ results }: Props) {
           <ReferenceLine y={0} stroke="var(--border-accent)" strokeWidth={1.5} />
           <Line dataKey="deltaC" name="Roth (Cash) Net − Traditional" stroke="var(--green)" strokeWidth={2.5} dot={false} />
           <Line dataKey="deltaB" name="Roth (IRA) − Traditional" stroke="var(--orange)" strokeWidth={2.5} dot={false} strokeDasharray="6 3" />
+          <Line dataKey="deltaD" name="Roth (IRA + Cash Invested) − Traditional" stroke="#bf5af2" strokeWidth={2.5} dot={false} />
           {breakevenC && (
             <ReferenceLine x={breakevenC} stroke="var(--green)" strokeDasharray="4 4"
-              label={{ value: `Age ${breakevenC}`, fill: 'var(--green)', fontSize: 10, position: 'insideTopLeft' }} />
+              label={{ value: `C: ${breakevenC}`, fill: 'var(--green)', fontSize: 10, position: 'insideTopLeft' }} />
           )}
           {breakevenB && (
             <ReferenceLine x={breakevenB} stroke="var(--orange)" strokeDasharray="4 4"
-              label={{ value: `Age ${breakevenB}`, fill: 'var(--orange)', fontSize: 10, position: 'insideTopRight' }} />
+              label={{ value: `B: ${breakevenB}`, fill: 'var(--orange)', fontSize: 10, position: 'insideTopRight' }} />
+          )}
+          {breakevenD && (
+            <ReferenceLine x={breakevenD} stroke="#bf5af2" strokeDasharray="4 4"
+              label={{ value: `D: ${breakevenD}`, fill: '#bf5af2', fontSize: 10, position: 'insideBottomLeft' }} />
           )}
         </ComposedChart>
       </ResponsiveContainer>

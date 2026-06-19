@@ -16,6 +16,7 @@ import { ExplainerTab } from './ExplainerTab'
 import { GuideTab } from './GuideTab'
 import { CRMTab } from './CRMTab'
 import { GapStrategyTab } from './GapStrategyTab'
+import { AssumptionsTab } from './AssumptionsTab'
 import type { FilingStatus } from '../engine/taxBrackets'
 import { generateClientReport } from '../utils/clientReportPdf'
 import { fmt, fmtFull } from '../utils/formatters'
@@ -32,7 +33,7 @@ interface Props {
   existingIncome: number
 }
 
-type MainTab = 'overview' | 'distributions' | 'gapstrategy' | 'montecarlo' | 'table' | 'math' | 'guide' | 'crm'
+type MainTab = 'overview' | 'distributions' | 'gapstrategy' | 'montecarlo' | 'table' | 'assumptions' | 'math' | 'guide' | 'crm'
 type ChartView = 'wealth' | 'balance' | 'taxes' | 'rmd' | 'breakeven'
 
 const MAIN_TABS: { key: MainTab; label: string }[] = [
@@ -41,6 +42,7 @@ const MAIN_TABS: { key: MainTab; label: string }[] = [
   { key: 'gapstrategy', label: 'Gap Strategy' },
   { key: 'montecarlo', label: 'Monte Carlo' },
   { key: 'table', label: 'Data Table' },
+  { key: 'assumptions', label: 'Assumptions' },
   { key: 'math', label: 'Math Guide' },
   { key: 'guide', label: 'Explainer' },
   { key: 'crm', label: 'Clients' },
@@ -108,19 +110,27 @@ export function Dashboard({ results, mcResults, mcLoading, distInputs, distData,
   const breakevenRef = useRef<HTMLDivElement>(null)
   const distRef = useRef<HTMLDivElement>(null)
 
-  const { inputs, traditional, rothFromIRA, rothFromCash, breakevenB, breakevenC } = results
+  const { inputs, traditional, rothFromIRA, rothFromCash, rothFromIRAWithSide, breakevenB, breakevenC, breakevenD } = results
   const lastTrad = traditional[traditional.length - 1]
   const lastRothC = rothFromCash[rothFromCash.length - 1]
+  const lastRothD = rothFromIRAWithSide[rothFromIRAWithSide.length - 1]
   const taxRate = effectiveTaxRate(inputs)
 
-  const bestFinal = Math.max(lastTrad.afterTaxWealth, rothFromIRA[rothFromIRA.length - 1].afterTaxWealth, lastRothC.afterTaxWealth)
+  const bestFinal = Math.max(
+    lastTrad.afterTaxWealth,
+    rothFromIRA[rothFromIRA.length - 1].afterTaxWealth,
+    lastRothC.afterTaxWealth,
+    lastRothD.afterTaxWealth,
+  )
   let bestStrategy = 'Traditional IRA'
   let bestColor = 'var(--blue)'
-  if (lastRothC.afterTaxWealth === bestFinal) { bestStrategy = 'Roth — Tax from Cash'; bestColor = 'var(--green)' }
+  let bestIsD = false
+  if (lastRothD.afterTaxWealth === bestFinal) { bestStrategy = 'Roth — IRA Tax + Cash Invested'; bestColor = '#bf5af2'; bestIsD = true }
+  else if (lastRothC.afterTaxWealth === bestFinal) { bestStrategy = 'Roth — Tax from Cash'; bestColor = 'var(--green)' }
   else if (rothFromIRA[rothFromIRA.length - 1].afterTaxWealth === bestFinal) { bestStrategy = 'Roth — Tax from IRA'; bestColor = 'var(--orange)' }
 
   const advantage = bestFinal - lastTrad.afterTaxWealth
-  const bestBreakeven = breakevenC ?? breakevenB
+  const bestBreakeven = breakevenD ?? breakevenC ?? breakevenB
 
   async function handleGenerateReport() {
     setGenerating(true)
@@ -215,6 +225,11 @@ export function Dashboard({ results, mcResults, mcLoading, distInputs, distData,
         }}>
           Based on current assumptions. Traditional after-tax wealth reflects liquidation value.
           Roth (Cash) net wealth subtracts the external tax cost paid at conversion.
+          {bestIsD && (
+            <span style={{ display: 'block', marginTop: 6, color: '#bf5af2' }}>
+              Scenario D assumes outside cash is invested separately and not used for withdrawals.
+            </span>
+          )}
         </div>
       </Card>
 
@@ -227,7 +242,9 @@ export function Dashboard({ results, mcResults, mcLoading, distInputs, distData,
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
           {bestStrategy === 'Traditional IRA'
             ? `At a ${Math.round(taxRate * 100)}% combined tax rate, the Roth conversion cost exceeds the benefit of tax-free growth within the ${inputs.endAge - inputs.currentAge}-year window. The Traditional IRA produces better after-tax outcomes under these assumptions.`
-            : `Converting to a Roth at age ${inputs.conversionAge} with a ${Math.round(taxRate * 100)}% tax rate costs ${fmtFull(Math.min(inputs.conversionAmount, inputs.initialBalance) * taxRate)} upfront${bestStrategy.includes('Cash') ? ' (paid from external cash)' : ' (deducted from the IRA)'}. The Roth's tax-free compounding then overtakes the Traditional${bestBreakeven ? ` at age ${bestBreakeven}` : ''} and builds a ${fmt(advantage)} advantage by age ${inputs.endAge}.`
+            : bestIsD
+              ? `Converting at age ${inputs.conversionAge} (tax from IRA) and investing the equivalent cash externally at ${Math.round(inputs.growthRate * 100)}% produces the highest total wealth. The side account overtakes the tax cost${bestBreakeven ? ` by age ${bestBreakeven}` : ''} and together with the Roth builds a ${fmt(advantage)} advantage over Traditional by age ${inputs.endAge}. This assumes the outside cash is invested separately and not used for withdrawals.`
+              : `Converting to a Roth at age ${inputs.conversionAge} with a ${Math.round(taxRate * 100)}% tax rate costs ${fmtFull(Math.min(inputs.conversionAmount, inputs.initialBalance) * taxRate)} upfront${bestStrategy.includes('Cash') ? ' (paid from external cash)' : ' (deducted from the IRA)'}. The Roth's tax-free compounding then overtakes the Traditional${bestBreakeven ? ` at age ${bestBreakeven}` : ''} and builds a ${fmt(advantage)} advantage by age ${inputs.endAge}.`
           }
         </p>
       </Card>
@@ -384,6 +401,13 @@ export function Dashboard({ results, mcResults, mcLoading, distInputs, distData,
         <Card style={{ padding: 22 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>Year-by-Year Projection</div>
           <ProjectionTable results={results} />
+        </Card>
+      )}
+
+      {/* ── ASSUMPTIONS TAB ── */}
+      {activeTab === 'assumptions' && (
+        <Card style={{ padding: '28px 32px' }}>
+          <AssumptionsTab results={results} />
         </Card>
       )}
 

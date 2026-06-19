@@ -5,6 +5,7 @@ import type {
   TraditionalYearData,
   RothFromIRAYearData,
   RothFromCashYearData,
+  RothFromIRAWithSideYearData,
 } from './types'
 import { calculateRMD } from './rmdTable'
 
@@ -272,9 +273,119 @@ function projectRothFromCash(inputs: PlanInputs, dist: DistributionInputs): Roth
   return rows
 }
 
+// Scenario D: same IRA conversion as Roth B (tax from IRA), but the conversion
+// tax amount is invested separately in a side account at the same growth rate.
+// The side account is never drawn down for retirement withdrawals.
+function projectRothFromIRAWithSide(
+  inputs: PlanInputs,
+  dist: DistributionInputs,
+): RothFromIRAWithSideYearData[] {
+  const rows: RothFromIRAWithSideYearData[] = []
+  const taxRate = effectiveTaxRate(inputs)
+  const g = inputs.growthRate
+
+  let tradBalance = inputs.initialBalance
+  let rothBalance = 0
+  let prevTradBalance = inputs.initialBalance
+  let cumulativeTaxesPaid = 0
+  let cumulativeNetDist = 0
+  let sideAccountBalance = 0
+
+  for (let age = inputs.currentAge; age <= inputs.endAge; age++) {
+    // IRS rule: RMD before conversion when conversionAge >= rmdStartAge
+    let preConvRMD = 0
+    let preConvRMDTax = 0
+    if (age === inputs.conversionAge && age >= inputs.rmdStartAge) {
+      preConvRMD = Math.min(calculateRMD(prevTradBalance, age, inputs.rmdStartAge), tradBalance)
+      preConvRMDTax = preConvRMD * taxRate
+      tradBalance -= preConvRMD
+      cumulativeTaxesPaid += preConvRMDTax
+      cumulativeNetDist += preConvRMD - preConvRMDTax
+    }
+
+    // Conversion: tax paid from IRA (same as Roth B).
+    // The tax amount seeds the side account instead of coming from outside cash.
+    let conversionTaxThisYear = 0
+    if (age === inputs.conversionAge) {
+      const amountToConvert = Math.min(inputs.conversionAmount, tradBalance)
+      const taxDue = amountToConvert * taxRate
+      tradBalance -= amountToConvert
+      rothBalance += amountToConvert - taxDue
+      cumulativeTaxesPaid += taxDue
+      conversionTaxThisYear = taxDue
+      sideAccountBalance = taxDue  // cash that would have been used externally is invested here
+    }
+
+    // Side account grows every year (including conversion year) at portfolio rate.
+    // No withdrawals ever come from the side account.
+    const sideGrowth = sideAccountBalance * g
+    sideAccountBalance += sideGrowth
+
+    const beginTrad = tradBalance
+    const beginRoth = rothBalance
+    const beginBalance = beginTrad + beginRoth
+
+    const rmd = preConvRMD > 0 ? 0 : calculateRMD(prevTradBalance, age, inputs.rmdStartAge)
+    const distTarget = annualDistTarget(age, dist)
+
+    const additionalNeeded = Math.max(0, distTarget - rmd - preConvRMD)
+    const rothWithdrawal = Math.min(additionalNeeded, beginRoth)
+    const extraFromTrad = Math.max(0, additionalNeeded - rothWithdrawal)
+    const totalTradWithdrawal = Math.min(beginTrad, rmd + extraFromTrad)
+
+    const tradGrowth = totalTradWithdrawal > 0
+      ? midYearGrowth(beginTrad, totalTradWithdrawal, g)
+      : beginTrad * g
+    const tradAfterGrowth = beginTrad + tradGrowth
+    const actualTradWithdrawal = Math.min(totalTradWithdrawal, tradAfterGrowth)
+    const actualRMD = Math.min(rmd, tradAfterGrowth)
+    const tradTaxes = actualTradWithdrawal * taxRate
+    const tradNetDist = actualTradWithdrawal - tradTaxes
+    const endTrad = Math.max(0, tradAfterGrowth - actualTradWithdrawal)
+
+    const rothGrowth = rothWithdrawal > 0
+      ? midYearGrowth(beginRoth, rothWithdrawal, g)
+      : beginRoth * g
+    const rothAfterGrowth = beginRoth + rothGrowth
+    const actualRothWithdrawal = Math.min(rothWithdrawal, rothAfterGrowth)
+    const endRoth = Math.max(0, rothAfterGrowth - actualRothWithdrawal)
+
+    const totalNetDist = tradNetDist + actualRothWithdrawal
+    cumulativeTaxesPaid += tradTaxes
+    cumulativeNetDist += totalNetDist
+    prevTradBalance = endTrad
+
+    tradBalance = endTrad
+    rothBalance = endRoth
+
+    // Roth D total wealth = Roth B after-tax wealth + side account
+    const rothBWealth = endRoth + endTrad * (1 - taxRate) + cumulativeNetDist
+    const totalWealth = rothBWealth + sideAccountBalance
+
+    rows.push({
+      age,
+      tradBalance: endTrad,
+      rothBalance: endRoth,
+      beginBalance,
+      growth: tradGrowth + rothGrowth,
+      rmdAmount: preConvRMD > 0 ? preConvRMD : actualRMD,
+      taxesPaid: preConvRMDTax + conversionTaxThisYear + tradTaxes,
+      netDistribution: (preConvRMD - preConvRMDTax) + totalNetDist,
+      endBalance: endTrad + endRoth,
+      cumulativeTaxesPaid,
+      sideAccountBalance,
+      sideAccountGrowth: sideGrowth,
+      afterTaxWealth: totalWealth,
+      cumulativeNetDistributions: cumulativeNetDist,
+    })
+  }
+
+  return rows
+}
+
 function findBreakeven(
   traditional: TraditionalYearData[],
-  roth: RothFromIRAYearData[] | RothFromCashYearData[],
+  roth: RothFromIRAYearData[] | RothFromCashYearData[] | RothFromIRAWithSideYearData[],
 ): number | null {
   for (let i = 0; i < traditional.length; i++) {
     if (roth[i].afterTaxWealth > traditional[i].afterTaxWealth) {
@@ -288,13 +399,16 @@ export function runProjection(inputs: PlanInputs, dist: DistributionInputs): Pro
   const traditional = projectTraditional(inputs, dist)
   const rothFromIRA = projectRothFromIRA(inputs, dist)
   const rothFromCash = projectRothFromCash(inputs, dist)
+  const rothFromIRAWithSide = projectRothFromIRAWithSide(inputs, dist)
 
   return {
     traditional,
     rothFromIRA,
     rothFromCash,
+    rothFromIRAWithSide,
     breakevenB: findBreakeven(traditional, rothFromIRA),
     breakevenC: findBreakeven(traditional, rothFromCash),
+    breakevenD: findBreakeven(traditional, rothFromIRAWithSide),
     inputs,
     distInputs: dist,
   }

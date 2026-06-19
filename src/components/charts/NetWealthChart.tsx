@@ -1,4 +1,3 @@
-import React from 'react'
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
@@ -14,6 +13,7 @@ export function NetWealthChart({ results }: Props) {
     rothIRA: results.rothFromIRA[i].afterTaxWealth,
     rothCashNet: results.rothFromCash[i].afterTaxWealth,
     rothCashGross: results.rothFromCash[i].afterTaxWealthGross,
+    rothWithSide: results.rothFromIRAWithSide[i].afterTaxWealth,
   }))
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -21,7 +21,7 @@ export function NetWealthChart({ results }: Props) {
     return (
       <div style={{
         background: 'var(--bg-card)', border: '1px solid var(--border-accent)',
-        borderRadius: 'var(--radius-md)', padding: '12px 16px', minWidth: 220,
+        borderRadius: 'var(--radius-md)', padding: '12px 16px', minWidth: 240,
       }}>
         <div style={{ color: 'var(--text-secondary)', fontSize: 11, marginBottom: 8 }}>
           Age {label} — After-Tax Wealth
@@ -39,7 +39,7 @@ export function NetWealthChart({ results }: Props) {
   }
 
   return (
-    <div style={{ width: '100%', height: 300 }}>
+    <div style={{ width: '100%', height: 320 }}>
       <ResponsiveContainer>
         <LineChart data={data} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -51,6 +51,7 @@ export function NetWealthChart({ results }: Props) {
           <Line dataKey="rothIRA" name="Roth (Tax from IRA)" stroke="var(--orange)" strokeWidth={2.5} dot={false} strokeDasharray="6 3" />
           <Line dataKey="rothCashNet" name="Roth (Cash) Net" stroke="var(--green)" strokeWidth={2.5} dot={false} />
           <Line dataKey="rothCashGross" name="Roth (Cash) Gross" stroke="var(--green)" strokeWidth={1.5} dot={false} strokeDasharray="3 3" opacity={0.5} />
+          <Line dataKey="rothWithSide" name="Roth (IRA Tax + Cash Invested)" stroke="#bf5af2" strokeWidth={2.5} dot={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>

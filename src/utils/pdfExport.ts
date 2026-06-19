@@ -31,6 +31,7 @@ export function exportToPDF(results: ProjectionResults): void {
   const lastTrad = traditional[traditional.length - 1]
   const lastRothB = rothFromIRA[rothFromIRA.length - 1]
   const lastRothC = rothFromCash[rothFromCash.length - 1]
+  const lastRothD = results.rothFromIRAWithSide[results.rothFromIRAWithSide.length - 1]
 
   autoTable(doc, {
     startY: 56,
@@ -39,6 +40,7 @@ export function exportToPDF(results: ProjectionResults): void {
       ['Traditional IRA', fmtFull(lastTrad.endBalance), fmtFull(lastTrad.cumulativeTaxes), fmtFull(lastTrad.afterTaxWealth)],
       ['Roth (Tax from IRA)', fmtFull(lastRothB.endBalance), fmtFull(lastRothB.cumulativeTaxesPaid), fmtFull(lastRothB.afterTaxWealth)],
       ['Roth (Tax from Cash)', fmtFull(lastRothC.endBalance), fmtFull(lastRothC.cumulativeTaxesPaid), fmtFull(lastRothC.afterTaxWealth)],
+      ['Roth (IRA Tax + Cash Invested)', fmtFull(lastRothD.endBalance), fmtFull(lastRothD.cumulativeTaxesPaid), fmtFull(lastRothD.afterTaxWealth)],
     ],
     headStyles: { fillColor: blue, textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [245, 247, 250] },
@@ -54,6 +56,7 @@ export function exportToPDF(results: ProjectionResults): void {
   doc.setFontSize(10)
   doc.text(breakevenB ? `Roth (Tax from IRA) overtakes Traditional IRA at age ${breakevenB}.` : 'Roth (Tax from IRA) never overtakes Traditional IRA in this projection.', 14, by + 7)
   doc.text(breakevenC ? `Roth (Tax from Cash) overtakes Traditional IRA at age ${breakevenC}.` : 'Roth (Tax from Cash) never overtakes Traditional IRA in this projection.', 14, by + 14)
+  doc.text(results.breakevenD ? `Roth (IRA Tax + Cash Invested) overtakes Traditional IRA at age ${results.breakevenD}.` : 'Roth (IRA Tax + Cash Invested) never overtakes Traditional IRA in this projection.', 14, by + 21)
 
   const ay = by + 26
   doc.setFontSize(11)
